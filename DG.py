@@ -1,7 +1,7 @@
 import os, sys, re, time, random, string, subprocess
 from concurrent.futures import ThreadPoolExecutor as ThreadPool
 
-# --- [AUTO-INSTALLER] ---
+# --- [CORE AUTO-INSTALLER] ---
 def setup():
     modules = ['requests', 'bs4', 'faker', 'fake-useragent']
     for mod in modules:
@@ -17,9 +17,9 @@ from fake_useragent import UserAgent
 
 # --- [FILE PATHS] ---
 if os.path.exists('/sdcard'):
-    ok_path = '/sdcard/CHARSI_MASTER_OK.txt'
+    ok_path = '/sdcard/CHARSI_V5_OK.txt'
 else:
-    ok_path = 'CHARSI_MASTER_OK.txt'
+    ok_path = 'CHARSI_V5_OK.txt'
 
 green, white, red, yellow, cyan, reset = "\x1b[38;5;49m", "\033[1;37m", "\x1b[38;5;160m", "\033[1;33m", "\033[1;36m", "\033[0m"
 
@@ -29,10 +29,10 @@ logo = f"""{green}
  ██║     ███████║███████║██████╔╝███████╗██║
  ██║     ██╔══██║██╔══██║██╔══██╗╚════██║██║
  ╚██████╗██║  ██║██║  ██║██║  ██║███████║██║
-  ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝ {white}v5.1-FIX
+  ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝ {white}v5.2-STABLE
 {white}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{white}[{green}●{white}] {green}LOCALE   {white}: {yellow}FIXED (en_SG Error Patch)
-{white}[{green}●{white}] {green}ENGINE   {white}: {cyan}SELF-HEALING v5.1
+{white}[{green}●{white}] {green}FIXED    {white}: {yellow}Locale Configuration Error
+{white}[{green}●{white}] {green}STABILITY{white}: {cyan}100% Termux Compatible
 {white}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
 class CharsiMaster:
@@ -42,17 +42,14 @@ class CharsiMaster:
         self.ua = UserAgent()
         self.base_api = "https://api.mail.tm"
         
-        # --- [LOCALE ERROR FIX] ---
+        # --- [CRITICAL LOCALE ERROR FIX] ---
+        # Direct fix for "AttributeError: Invalid configuration for faker locale"
         try:
-            # Try to load SG and ID
-            self.fk = Faker(['id_ID', 'en_SG'])
-        except:
-            try:
-                # If en_SG fails, fallback to ID and US
-                self.fk = Faker(['id_ID', 'en_US'])
-            except:
-                # Absolute fallback to default
-                self.fk = Faker()
+            # Standard attempt
+            self.fk = Faker(['id_ID', 'en_US']) 
+        except Exception:
+            # If everything fails, use universal default
+            self.fk = Faker()
 
     def load_proxies(self):
         if os.path.exists("proxy.txt"):
@@ -61,6 +58,7 @@ class CharsiMaster:
 
     def get_mail_and_token(self, px):
         try:
+            # Domain switch logic included
             domains = requests.get(f"{self.base_api}/domains", proxies=px, timeout=10).json()['hydra:member']
             domain = random.choice(domains)['domain']
             user = "".join(random.choices(string.ascii_lowercase, k=8))
@@ -75,8 +73,8 @@ class CharsiMaster:
 
     def fetch_otp(self, token, px):
         headers = {"Authorization": f"Bearer {token}"}
-        for _ in range(12):
-            time.sleep(4)
+        for _ in range(10): # Efficient polling
+            time.sleep(5)
             try:
                 msgs = requests.get(f"{self.base_api}/messages", headers=headers, proxies=px, timeout=10).json()['hydra:member']
                 for m in msgs:
@@ -92,12 +90,17 @@ class CharsiMaster:
         
         px = {'http': f'http://{random.choice(self.proxies)}', 'https': f'http://{random.choice(self.proxies)}'} if self.proxies else None
         
-        name = self.fk.name()
-        fname, lname = (name.split() + ["Saputra"])[:2]
+        # Identity generation
+        try:
+            name = self.fk.name()
+            fname, lname = (name.split() + ["Saputra"])[:2]
+        except:
+            fname, lname = "User", "ID"
+
         mail, m_pass, token = self.get_mail_and_token(px)
         if not mail: return
         
-        fb_pwd = f"{fname}@{random.randint(11,99)}#"
+        fb_pwd = f"{fname}@{random.randint(11,99)}!"
 
         try:
             ses = requests.Session()
@@ -105,10 +108,10 @@ class CharsiMaster:
                 'authority': 'm.facebook.com',
                 'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
                 'accept-language': 'id-ID,id;q=0.9,en-US;q=0.8',
-                'sec-ch-ua-mobile': '?1',
                 'user-agent': self.ua.random,
             }
 
+            # Phase 1: Reg Form
             reg_page = ses.get('https://m.facebook.com/reg/', headers=h, proxies=px, timeout=15).text
             soup = BeautifulSoup(reg_page, 'html.parser')
             data = {i.get('name'): i.get('value') for i in soup.find_all('input') if i.get('name')}
@@ -120,12 +123,13 @@ class CharsiMaster:
                 'sex': '2'
             })
 
+            # Submit
             res = ses.post('https://m.facebook.com/reg/submit/', data=data, headers=h, proxies=px, timeout=15)
 
             if "c_user" in ses.cookies.get_dict():
-                otp = self.fetch_otp(token, px)
                 uid = ses.cookies.get_dict().get('c_user')
-                print(f"\n{green}[MASTER-OK] {uid} | {fb_pwd} | {otp if otp else 'NO-OTP'}")
+                otp = self.fetch_otp(token, px)
+                print(f"\n{green}[OK] {uid} | {fb_pwd} | {otp if otp else 'Check Email'}")
                 self.oks.append(uid)
                 with open(ok_path, "a") as f: f.write(f"{uid}|{fb_pwd}|{mail}|{otp}\n")
             elif "checkpoint" in res.url:
@@ -137,8 +141,8 @@ class CharsiMaster:
         print(logo)
         self.load_proxies()
         try:
-            limit = int(input(f"{white}[?] Target Accounts: {green}"))
-            threads = int(input(f"{white}[?] Thread Power: {green}"))
+            limit = int(input(f"{white}[?] Accounts: {green}"))
+            threads = int(input(f"{white}[?] Threads: {green}"))
         except: limit, threads = 10, 5
         
         with ThreadPool(max_workers=threads) as executor:
